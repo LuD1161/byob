@@ -4,29 +4,25 @@
 
 # standard library
 import os
-import sys
-import imp
-import json
 import struct
 import base64
 import socket
-import urllib
-import logging
-import tempfile
+import hashlib
 import StringIO
 
 # packages
 try:
-    import Cryptodome.Util.number
-    import Cryptodome.Cipher.AES
     import Cryptodome.Hash.HMAC
-    import Cryptodome.Hash.SHA256
+    import Cryptodome.Cipher.AES
+    import Cryptodome.Util.number
+    import Cryptodome.PublicKey.RSA
+    import Cryptodome.Cipher.PKCS1_OAEP
 except ImportError:
     pass
 
 # main
 def diffiehellman(connection):
-    """ 
+    """
     Diffie-Hellman Internet Key Exchange (RFC 2741)
 
     `Requires`
@@ -43,21 +39,21 @@ def diffiehellman(connection):
         connection.send(Cryptodome.Util.number.long_to_bytes(xA))
         xB = Cryptodome.Util.number.bytes_to_long(connection.recv(256))
         x  = pow(xB, a, p)
-        return Cryptodome.Hash.SHA256.new(Cryptodome.Util.number.long_to_bytes(x)).digest()
+        return hashlib.sha256(Cryptodome.Util.number.long_to_bytes(x)).digest()
     else:
         raise TypeError("argument 'connection' must be type '{}'".format(socket.socket))
 
 def encrypt_aes(plaintext, key, padding=chr(0)):
-    """ 
+    """
     AES-256-OCB encryption
 
     `Requires`
     :param str plaintext:   plain text/data
-    :param str key:         session encryption key 
+    :param str key:         session encryption key
 
     `Optional`
     :param str padding:     default: (null byte)
-    
+
     Returns encrypted ciphertext as base64-encoded string
 
     """
@@ -67,18 +63,18 @@ def encrypt_aes(plaintext, key, padding=chr(0)):
     return base64.b64encode(output)
 
 def decrypt_aes(ciphertext, key, padding=chr(0)):
-    """ 
+    """
     AES-256-OCB decryption
 
     `Requires`
     :param str ciphertext:  encrypted block of data
-    :param str key:         session encryption key 
+    :param str key:         session encryption key
 
     `Optional`
     :param str padding:     default: (null byte)
 
     Returns decrypted plaintext as string
-    
+
     """
     data = StringIO.StringIO(base64.b64decode(ciphertext))
     nonce, tag, ciphertext = [ data.read(x) for x in (Cryptodome.Cipher.AES.block_size - 1, Cryptodome.Cipher.AES.block_size, -1) ]
@@ -86,7 +82,7 @@ def decrypt_aes(ciphertext, key, padding=chr(0)):
     return cipher.decrypt_and_verify(ciphertext, tag)
 
 def encrypt_xor(data, key, block_size=8, key_size=16, num_rounds=32, padding=chr(0)):
-    """ 
+    """
     XOR-128 encryption
 
     `Required`
@@ -110,7 +106,7 @@ def encrypt_xor(data, key, block_size=8, key_size=16, num_rounds=32, padding=chr
         block   = bytes().join(chr(ord(x) ^ ord(y)) for x, y in zip(vector, block))
         v0, v1  = struct.unpack("!2L", block)
         k       = struct.unpack("!4L", key[:key_size])
-        sum, delta, mask = 0L, 0x9e3779b9L, 0xffffffffL
+        sum, delta, mask = 0, 0x9e3779b9, 0xffffffff
         for round in range(num_rounds):
             v0  = (v0 + (((v1 << 4 ^ v1 >> 5) + v1) ^ (sum + k[sum & 3]))) & mask
             sum = (sum + delta) & mask
@@ -120,7 +116,7 @@ def encrypt_xor(data, key, block_size=8, key_size=16, num_rounds=32, padding=chr
     return base64.b64encode(bytes().join(result))
 
 def decrypt_xor(data, key, block_size=8, key_size=16, num_rounds=32, padding=chr(0)):
-    """ 
+    """
     XOR-128 encryption
 
     `Required`
@@ -143,7 +139,7 @@ def decrypt_xor(data, key, block_size=8, key_size=16, num_rounds=32, padding=chr
     for block in blocks[1:]:
         v0, v1  = struct.unpack("!2L", block)
         k0     = struct.unpack("!4L", key[:key_size])
-        delta, mask = 0x9e3779b9L, 0xffffffffL
+        delta, mask = 0x9e3779b9, 0xffffffff
         sum     = (delta * num_rounds) & mask
         for round in range(num_rounds):
             v1  = (v1 - (((v0 << 4 ^ v0 >> 5) + v0) ^ (sum + k0[sum >> 11 & 3]))) & mask
@@ -154,4 +150,3 @@ def decrypt_xor(data, key, block_size=8, key_size=16, num_rounds=32, padding=chr
         vector  = block
         result.append(output)
     return str().join(result).rstrip(padding)
-

@@ -39,12 +39,8 @@ byob.core
   byob.core.util
     miscellaneous utility functions that are used by many modules
 
-  byob.core.handlers
-    request handlers which can be paired with the base Server class to form
-    3 different types of server instances which the C2 runs in parallel
-     - Request Handler: handles requests for files in the byob.remote package
-     - Session Handler: handles client sessions & server-side of reverse TCP shells
-     - Task Handler:    handles completed tasks by updating issued tasks in database
+  byob.core.handler
+    HTTP POST request handler for receiving client file uploads
 
   byob.core.security
     module containing the Diffie-Hellman Internet Key Exchange (RFC 2741)
@@ -89,6 +85,9 @@ byob.modules
   byob.modules.ransom
     encrypt files & generate random BTC wallet for ransom payment
 
+  byob.modules.icloud
+    check for logged in iCloud account on macOS
+
   byob.modules.outlook
     read/search/upload emails from the local Outlook client
 
@@ -119,7 +118,7 @@ byob.modules
     package containing the payloads created by client generator that are being
     hosted locally by the server (rather than uploaded to Pastebin to be hosted
     there anonymously) for the client stagers to load & execute on the target
-    host machines 
+    host machines
 
   byob.modules.stagers
     package containing payload stagers created by the client generator along
@@ -135,11 +134,12 @@ def __get_all():
 
 def main():
     for module in __all__:
-        exec "import {}".format(module)
+        exec("import {}".format(module))
 
-__all__ 	= __get_all()
-__version__     = '0.1.5'
-__license__     = 'GPLv3'
-__author__      = 'Daniel Vega-Myhre'
-__github__      = 'https://github.com/colental/byob'
-# main()
+__all__ = __get_all()
+__version__ = '0.2'
+__license__ = 'GPLv3'
+__author__ = 'Daniel Vega-Myhre'
+__github__ = 'https://github.com/malwaredllc/byob'
+
+main()

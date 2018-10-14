@@ -3,13 +3,12 @@
 'Setup (Build Your Own Botnet)'
 
 def main():
-    """ 
+    """
     Run the BYOB setup script
 
     """
     import os
     import sys
-    import imp
     import urllib
     import logging
     import getpass
@@ -28,7 +27,7 @@ def main():
     # install pip if missing
     if not bool('pip_path' in locals() and os.path.exists(pip_path)):
         try:
-            exec urllib.urlopen("https://bootstrap.pypa.io/get-pip.py").read() in globals()
+            exec(urllib.urlopen("https://bootstrap.pypa.io/get-pip.py").read(), globals())
         except Exception as e:
             logger.debug("Error installing pip: {}".format(str(e)))
 
@@ -44,17 +43,17 @@ def main():
             break
 
     # install requirements
-    sudo_passwd = getpass.getpass('Enter your sudo password (to install python dependencies) :') if os.name == 'posix' else ''
+    sudo_passwd = getpass.getpass('Enter your sudo password (to install python dependencies): ') if os.name == 'posix' else ''
     for i, _ in enumerate(open(requirements, 'r').readlines()):
         try:
             print("Installing {}...".format(_.rstrip()))
             locals()['pip_install_%d' % i] = subprocess.Popen('{} install {}'.format(pip_path if os.name == 'nt' else 'sudo {}'.format(pip_path), _.rstrip()), 0, None, subprocess.PIPE, subprocess.PIPE, subprocess.PIPE, shell=True)
             if i == 0:
-	        locals()['pip_install_%d' % i].communicate(sudo_passwd + '\n')
+                locals()['pip_install_%d' % i].communicate(sudo_passwd + '\n')
         except Exception as e:
             logger.error("Error installing package: {}".format(_))
 
-    for x in xrange(20):
+    for x in range(20):
         if 'pip_install_%d' % x in locals():
             locals()['pip_install_%d' % x].wait()
 

